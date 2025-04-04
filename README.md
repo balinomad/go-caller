@@ -28,3 +28,37 @@ func someFunc() {
     fmt.Println("Function:", c.Function())
     fmt.Println("Package:", c.PackageName())
 }
+```
+
+## 📌 Installation
+
+```bash
+go get github.com/balinomad/go-caller
+```
+
+## 📘 API Highlights
+
+| Method           | Description                                  |
+|------------------|----------------------------------------------|
+| `File()`         | Full file path                               |
+| `Line()`         | Line number                                  |
+| `Location()`     | Full location (`path/to/file.go:123`)        |
+| `ShortLocation()`| Short location (`file.go:123`)               |
+| `Function()`     | Method/function name only                    |
+| `FullFunction()` | Full path to method including package        |
+| `Package()`      | Full import path of the package              |
+| `PackageName()`  | Last element of the package path             |
+| `String()`       | Returns `ShortLocation()` for easy logging   |
+
+## 🔧 Advanced
+
+For custom skipping depth or use with program counters:
+
+```go
+c := caller.New(skip)
+c := caller.NewFromPC(pc)
+```
+
+## ⚖️ License
+
+MIT License — see `LICENSE` file for details.
