@@ -1,6 +1,6 @@
-# go-caller 📞
+# go-caller
 
-A lightweight and idiomatic Go library that captures and formats caller information such as file name, line number, function name, and package path.
+*A lightweight and idiomatic Go library that captures and formats caller information such as file name, line number, function name, and package path.*
 
 Perfect for use in:
 - Custom error types
