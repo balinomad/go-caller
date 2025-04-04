@@ -19,7 +19,7 @@ Perfect for use in:
 ## 🚀 Usage
 
 ```go
-import "github.com/yourname/caller"
+import "github.com/balinomad/go-caller"
 
 func someFunc() {
     c := caller.Immediate()
@@ -33,7 +33,7 @@ func someFunc() {
 ## 📌 Installation
 
 ```bash
-go get github.com/balinomad/go-caller
+go get github.com/balinomad/go-caller@latest
 ```
 
 ## 📘 API Highlights
