@@ -94,9 +94,15 @@ func New(skip int) Caller {
 		fullFunc = f.Name()
 	}
 
+	// Validate the line
+	lineUint, ok := safeUint16(line)
+	if !ok {
+		lineUint = 0
+	}
+
 	return &callerInfo{
 		file:   file,
-		line:   uint16(line),
+		line:   lineUint,
 		fn:     fullFunc,
 		dotIdx: functionNameIndex(fullFunc),
 	}
@@ -125,12 +131,19 @@ func NewFromPC(pc uintptr) Caller {
 		return nil
 	}
 
+	// Get the full function name, file, and line
 	fullFunc = f.Name()
 	file, line = f.FileLine(pc)
 
+	// Validate the line
+	lineUint, ok := safeUint16(line)
+	if !ok {
+		lineUint = 0
+	}
+
 	return &callerInfo{
 		file:   file,
-		line:   uint16(line),
+		line:   lineUint,
 		fn:     fullFunc,
 		dotIdx: functionNameIndex(fullFunc),
 	}
@@ -163,7 +176,7 @@ func (c *callerInfo) Location() string {
 	var sb strings.Builder
 	sb.WriteString(c.file)
 	sb.WriteByte(':')
-	sb.WriteString(strconv.Itoa(int(c.line)))
+	sb.Write(strconv.AppendInt(nil, int64(c.line), 10))
 	return sb.String()
 }
 
@@ -181,7 +194,7 @@ func (c *callerInfo) ShortLocation() string {
 	var sb strings.Builder
 	sb.WriteString(shortFile)
 	sb.WriteByte(':')
-	sb.WriteString(strconv.Itoa(int(c.line)))
+	sb.Write(strconv.AppendInt(nil, int64(c.line), 10))
 	return sb.String()
 }
 
@@ -194,7 +207,9 @@ func (c *callerInfo) Function() string {
 	if c.dotIdx == 0 {
 		return c.fn
 	}
-	return c.fn[c.dotIdx+1:]
+
+	// Return a copy of the function name
+	return string([]byte(c.fn[c.dotIdx+1:]))
 }
 
 // FullFunction returns the full function name including package.
@@ -210,7 +225,9 @@ func (c *callerInfo) Package() string {
 	if c.dotIdx == -1 {
 		return c.fn
 	}
-	return c.fn[:c.dotIdx]
+
+	// Return a copy of the package path
+	return string([]byte(c.fn[:c.dotIdx]))
 }
 
 // PackageName returns the name of the package without the directory.
@@ -263,11 +280,13 @@ func (c *callerInfo) UnmarshalJSON(data []byte) error {
 
 	c.file = aux.File
 
-	if aux.Line < 0 || aux.Line > int(^uint16(0)) {
+	// Validate and set line
+	line, ok := safeUint16(aux.Line)
+	if !ok {
 		return fmt.Errorf("invalid line number: %d", aux.Line)
 	}
+	c.line = line
 
-	c.line = uint16(aux.Line)
 	// Early return if Function is empty
 	if aux.Function == "" {
 		c.fn = ""
@@ -311,4 +330,13 @@ func functionNameIndex(name string) int {
 	}
 
 	return -1
+}
+
+// safeUint16 converts an int to a uint16.
+// Returns false if the value is out of range.
+func safeUint16(value int) (uint16, bool) {
+	if value < 0 || value > int(^uint16(0)) {
+		return 0, false
+	}
+	return uint16(value), true
 }
