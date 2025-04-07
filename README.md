@@ -10,11 +10,13 @@ Perfect for use in:
 
 ## ✨ Features
 
+- Minimal and dependency-free
+- Clean, consistent API with platform-independent file paths
 - Get full or short location (`file:line`)
 - Extract function name, full function path, and package info
-- Clean, consistent API with platform-independent internals
 - Implements `fmt.Stringer` for easy logging
-- Minimal and dependency-free
+- Implements `json.Marshaler` and `json.Unmarshaler` for easy JSON serialization
+
 
 ## 🚀 Usage
 
@@ -27,6 +29,11 @@ func someFunc() {
     fmt.Println("Short:", c.ShortLocation())
     fmt.Println("Function:", c.Function())
     fmt.Println("Package:", c.PackageName())
+    data, err := json.Marshal(c)
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println("JSON:", string(data))
 }
 ```
 
@@ -38,17 +45,19 @@ go get github.com/balinomad/go-caller@latest
 
 ## 📘 API Highlights
 
-| Method           | Description                                  |
-|------------------|----------------------------------------------|
-| `File()`         | Full file path                               |
-| `Line()`         | Line number                                  |
-| `Location()`     | Full location (`path/to/file.go:123`)        |
-| `ShortLocation()`| Short location (`file.go:123`)               |
-| `Function()`     | Method/function name only                    |
-| `FullFunction()` | Full path to method including package        |
-| `Package()`      | Full import path of the package              |
-| `PackageName()`  | Last element of the package path             |
-| `String()`       | Returns `ShortLocation()` for easy logging   |
+| Method            | Description                                |
+|-------------------|--------------------------------------------|
+| `File()`          | Full file path                             |
+| `Line()`          | Line number                                |
+| `Location()`      | Full location (`path/to/file.go:123`)      |
+| `ShortLocation()` | Short location (`file.go:123`)             |
+| `Function()`      | Method/function name only                  |
+| `FullFunction()`  | Full path to method including package      |
+| `Package()`       | Full import path of the package            |
+| `PackageName()`   | Last element of the package path           |
+| `String()`        | Returns `ShortLocation()` for easy logging |
+| `MarshalJSON()`   | Marshal caller info to JSON                |
+| `UnmarshalJSON()` | Unmarshal JSON to caller info              |
 
 ## 🔧 Advanced
 
