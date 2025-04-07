@@ -35,30 +35,16 @@ func Test_callerInfo_Function(t *testing.T) {
 			want: "(*Type).MethodName",
 		},
 		{
-			name: "package function with Unix-style path",
+			name: "imported package function",
 			fields: fields{
 				fn: "github.com/user/package.FunctionName",
 			},
 			want: "FunctionName",
 		},
 		{
-			name: "package method with Unix-style path",
+			name: "imported package method",
 			fields: fields{
 				fn: "github.com/user/package.(*Type).MethodName",
-			},
-			want: "(*Type).MethodName",
-		},
-		{
-			name: "package function with Windows-style path",
-			fields: fields{
-				fn: "C:\\user\\package.FunctionName",
-			},
-			want: "FunctionName",
-		},
-		{
-			name: "package method with Windows-style path",
-			fields: fields{
-				fn: "C:\\user\\package.(*Type).MethodName",
 			},
 			want: "(*Type).MethodName",
 		},
@@ -107,32 +93,18 @@ func Test_callerInfo_Package(t *testing.T) {
 			want: "package",
 		},
 		{
-			name: "package function with Unix-style path",
+			name: "imported package function",
 			fields: fields{
 				fn: "github.com/user/package.FunctionName",
 			},
 			want: "github.com/user/package",
 		},
 		{
-			name: "package method with Unix-style path",
+			name: "imported package method",
 			fields: fields{
 				fn: "github.com/user/package.(*Type).MethodName",
 			},
 			want: "github.com/user/package",
-		},
-		{
-			name: "package function with Windows-style path",
-			fields: fields{
-				fn: "c:\\user\\package.FunctionName",
-			},
-			want: "c:\\user\\package",
-		},
-		{
-			name: "package method with Windows-style path",
-			fields: fields{
-				fn: "c:\\user\\package.(*Type).MethodName",
-			},
-			want: "c:\\user\\package",
 		},
 	}
 	for _, tt := range tests {

@@ -241,16 +241,17 @@ func functionNameIndex(name string) int {
 		return -1
 	}
 
-	// Extract the package path and base name
-	dir, base := filepath.Split(name)
-	if base == "" {
-		return -1
+	// Extract the base name
+	base := name
+	lastSlash := strings.LastIndexByte(name, '/') + 1
+	if lastSlash != 0 {
+		base = name[lastSlash:]
 	}
 
 	// Find the first dot in the base name
-	firstDot := strings.Index(base, ".")
-	if firstDot != -1 {
-		return len(dir) + firstDot
+	if firstDot := strings.IndexByte(base, '.'); firstDot != -1 {
+		return lastSlash + firstDot
 	}
+
 	return -1
 }
