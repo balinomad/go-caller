@@ -9,6 +9,7 @@ using the Go runtime and formats it in a developer-friendly way.
 package caller
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -19,6 +20,8 @@ import (
 // Caller provides access to source information about the caller.
 type Caller interface {
 	fmt.Stringer
+	json.Marshaler
+	json.Unmarshaler
 
 	// Valid returns true if the caller is usable.
 	Valid() bool
@@ -228,6 +231,60 @@ func (c *callerInfo) PackageName() string {
 // It is provided for compatibility with the fmt.Stringer interface.
 func (c *callerInfo) String() string {
 	return c.ShortLocation()
+}
+
+// MarshalJSON implements the json.Marshaler interface.
+func (c *callerInfo) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		File     string `json:"file"`
+		Line     int    `json:"line"`
+		Function string `json:"function"`
+		Package  string `json:"package"`
+	}{
+		File:     c.file,
+		Line:     int(c.line),
+		Function: c.Function(),
+		Package:  c.Package(),
+	})
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface.
+func (c *callerInfo) UnmarshalJSON(data []byte) error {
+	var aux struct {
+		File     string `json:"file"`
+		Line     int    `json:"line"`
+		Function string `json:"function"`
+		Package  string `json:"package"`
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	c.file = aux.File
+
+	if aux.Line < 0 || aux.Line > int(^uint16(0)) {
+		return fmt.Errorf("invalid line number: %d", aux.Line)
+	}
+
+	c.line = uint16(aux.Line)
+	// Early return if Function is empty
+	if aux.Function == "" {
+		c.fn = ""
+		c.dotIdx = -1
+		return nil
+	}
+
+	// If package is empty, use only function name
+	if aux.Package == "" {
+		c.fn = aux.Function
+		c.dotIdx = -1
+		return nil
+	}
+
+	c.fn = aux.Package + "." + aux.Function
+	c.dotIdx = functionNameIndex(c.fn)
+	return nil
 }
 
 // functionNameIndex returns the index of the dot separator
