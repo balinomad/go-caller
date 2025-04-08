@@ -14,9 +14,9 @@ Perfect for use in:
 - Clean, consistent API with platform-independent file paths
 - Get full or short location (`file:line`)
 - Extract function name, full function path, and package info
-- Implements `fmt.Stringer` for easy logging
-- Implements `json.Marshaler` and `json.Unmarshaler` for easy JSON serialization
-- Implements `slog.Value` for structured logging
+- Implements `fmt.Stringer` interface for easy logging
+- Implements `json.Marshaler` and `json.Unmarshaler` interfaces for easy JSON serialization
+- Implements `slog.LogValuer` interface for structured logging
 
 ## 🚀 Usage
 
