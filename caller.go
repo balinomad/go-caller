@@ -11,6 +11,7 @@ package caller
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -22,6 +23,7 @@ type Caller interface {
 	fmt.Stringer
 	json.Marshaler
 	json.Unmarshaler
+	slog.LogValuer
 
 	// Valid returns true if the caller is usable.
 	Valid() bool
@@ -304,6 +306,33 @@ func (c *callerInfo) UnmarshalJSON(data []byte) error {
 	c.fn = aux.Package + "." + aux.Function
 	c.dotIdx = functionNameIndex(c.fn)
 	return nil
+}
+
+// LogValue constructs and returns a slog.Value representing the caller information.
+// It includes attributes such as the file name, line number, function name,
+// and package if they are available. If no attributes are available, it returns
+// an empty slog.Value.
+func (c *callerInfo) LogValue() slog.Value {
+	attrs := make([]slog.Attr, 0, 4)
+
+	if c.file != "" {
+		attrs = append(attrs, slog.String("file", c.file))
+	}
+	if c.line > 0 {
+		attrs = append(attrs, slog.Int("line", int(c.line)))
+	}
+	if fn := c.Function(); fn != "" {
+		attrs = append(attrs, slog.String("function", fn))
+	}
+	if pkg := c.Package(); pkg != "" {
+		attrs = append(attrs, slog.String("package", pkg))
+	}
+
+	if len(attrs) == 0 {
+		return slog.Value{}
+	}
+
+	return slog.GroupValue(attrs...)
 }
 
 // functionNameIndex returns the index of the dot separator

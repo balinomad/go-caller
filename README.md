@@ -16,7 +16,7 @@ Perfect for use in:
 - Extract function name, full function path, and package info
 - Implements `fmt.Stringer` for easy logging
 - Implements `json.Marshaler` and `json.Unmarshaler` for easy JSON serialization
-
+- Implements `slog.Value` for structured logging
 
 ## 🚀 Usage
 
@@ -45,19 +45,20 @@ go get github.com/balinomad/go-caller@latest
 
 ## 📘 API Highlights
 
-| Method            | Description                                |
-|-------------------|--------------------------------------------|
-| `File()`          | Full file path                             |
-| `Line()`          | Line number                                |
-| `Location()`      | Full location (`path/to/file.go:123`)      |
-| `ShortLocation()` | Short location (`file.go:123`)             |
-| `Function()`      | Method/function name only                  |
-| `FullFunction()`  | Full path to method including package      |
-| `Package()`       | Full import path of the package            |
-| `PackageName()`   | Last element of the package path           |
-| `String()`        | Returns `ShortLocation()` for easy logging |
-| `MarshalJSON()`   | Marshal caller info to JSON                |
-| `UnmarshalJSON()` | Unmarshal JSON to caller info              |
+| Method            | Description                                     |
+|-------------------|-------------------------------------------------|
+| `File()`          | Full file path                                  |
+| `Line()`          | Line number                                     |
+| `Location()`      | Full location (`path/to/file.go:123`)           |
+| `ShortLocation()` | Short location (`file.go:123`)                  |
+| `Function()`      | Method/function name only                       |
+| `FullFunction()`  | Full path to method including package           |
+| `Package()`       | Full import path of the package                 |
+| `PackageName()`   | Last element of the package path                |
+| `String()`        | Returns `ShortLocation()` for easy logging      |
+| `MarshalJSON()`   | Marshal caller info to JSON                     |
+| `UnmarshalJSON()` | Unmarshal JSON to caller info                   |
+| `LogValue()`      | Construct a `slog.Value` for structured logging |
 
 ## 🔧 Advanced
 
