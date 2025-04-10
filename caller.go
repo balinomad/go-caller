@@ -1,11 +1,3 @@
-/*
-Package caller provides utilities to extract source code location
-information (file, line, function, and package) for the current
-or specified call frame.
-It is designed for use in logging, error reporting, and debugging
-with a lightweight and idiomatic API. Caller captures runtime metadata
-using the Go runtime and formats it in a developer-friendly way.
-*/
 package caller
 
 import (
