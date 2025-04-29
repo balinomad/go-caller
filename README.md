@@ -1,3 +1,5 @@
+[![Go](https://github.com/balinomad/go-caller/actions/workflows/go.yml/badge.svg)](https://github.com/balinomad/go-caller/actions/workflows/go.yml)
+
 # go-caller
 
 *A lightweight and idiomatic Go library that captures and formats caller information such as file name, line number, function name, and package path.*
