@@ -1,3 +1,3 @@
 module github.com/balinomad/go-caller
 
-go 1.10
+go 1.21
