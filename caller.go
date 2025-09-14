@@ -1,3 +1,28 @@
+/*
+Package caller provides utilities to extract source code location
+information (file, line, function, and package) for the current
+or specified call frame.
+It is designed for use in logging, error reporting, and debugging
+with a lightweight and idiomatic API. Caller captures runtime metadata
+using the Go runtime and formats it in a developer-friendly way.
+
+Example usage:
+
+	import "github.com/balinomad/go-caller"
+
+	func someFunc() {
+		c := caller.Immediate()
+		fmt.Println("Caller location:", c.Location())
+		fmt.Println("Short:", c.ShortLocation())
+		fmt.Println("Function:", c.Function())
+		fmt.Println("Package:", c.PackageName())
+		data, err := json.Marshal(c)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("JSON:", string(data))
+	}
+*/
 package caller
 
 import (
@@ -44,6 +69,9 @@ type Caller interface {
 
 	// PackageName returns the name of the package without the directory.
 	PackageName() string
+
+	// Equal reports whether this caller is semantically equal to another.
+	Equal(other Caller) bool
 }
 
 // callerInfo represents source information about the caller.
@@ -68,16 +96,15 @@ const skipAdjust = 2
 // New returns a new Caller with source information populated.
 // The skip parameter specifies the number of stack frames to skip
 // in addition to the default offset. Use 0 to get the immediate caller.
-// Returns nil if the skip is invalid or the caller cannot be determined.
+// It returns nil if the skip is invalid or the caller cannot be determined.
 func New(skip int) Caller {
-	// Check depth and return nil if invalid
-	effectiveDepth := skip + skipAdjust
-	if effectiveDepth <= 0 {
+	// A negative skip is invalid as it would look up the stack
+	if skip < 0 {
 		return nil
 	}
 
 	// Get caller information with the effective depth to skip
-	pc, file, line, ok := runtime.Caller(effectiveDepth)
+	pc, file, line, ok := runtime.Caller(skip + skipAdjust)
 	if !ok {
 		return nil
 	}
@@ -104,14 +131,14 @@ func New(skip int) Caller {
 
 // Immediate returns a Caller for the immediate caller of the function
 // that calls Immediate().
-// Returns nil if the caller cannot be determined.
+// It returns nil if the caller cannot be determined.
 func Immediate() Caller {
 	return New(0)
 }
 
 // NewFromPC returns a new Caller with source information populated
 // based on the provided program counter.
-// Returns nil if the caller cannot be determined.
+// It returns nil if the caller cannot be determined.
 func NewFromPC(pc uintptr) Caller {
 	var (
 		fullFunc string
@@ -145,96 +172,90 @@ func NewFromPC(pc uintptr) Caller {
 
 // Valid returns true if the caller is usable.
 func (c *callerInfo) Valid() bool {
-	return c.file != "" && c.line > 0 && c.fn != ""
+	return c != nil && c.file != ""
 }
 
 // File returns the file name.
 func (c *callerInfo) File() string {
+	if c == nil {
+		return ""
+	}
 	return c.file
 }
 
 // Line returns the line number.
 func (c *callerInfo) Line() int {
+	if c == nil {
+		return 0
+	}
 	return int(c.line)
 }
 
 // Location returns a formatted string with file:line.
 func (c *callerInfo) Location() string {
-	if c.file == "" {
+	if c == nil || c.file == "" {
 		return ""
 	}
-	if c.line == 0 {
+	if c.line <= 0 {
 		return c.file
 	}
 
 	var sb strings.Builder
 	sb.WriteString(c.file)
 	sb.WriteByte(':')
-	sb.Write(strconv.AppendInt(nil, int64(c.line), 10))
+	sb.WriteString(strconv.Itoa(c.Line()))
 	return sb.String()
 }
 
 // ShortLocation returns a formatted string with just filename:line.
 func (c *callerInfo) ShortLocation() string {
-	if c.file == "" {
+	if c == nil || c.file == "" {
 		return ""
 	}
-
 	shortFile := filepath.Base(c.file)
-	if c.line == 0 {
+	if c.line <= 0 {
 		return shortFile
 	}
 
 	var sb strings.Builder
 	sb.WriteString(shortFile)
 	sb.WriteByte(':')
-	sb.Write(strconv.AppendInt(nil, int64(c.line), 10))
+	sb.WriteString(strconv.Itoa(c.Line()))
 	return sb.String()
 }
 
 // Function returns just the function or method name
 // without package prefix.
 func (c *callerInfo) Function() string {
-	if c.fn == "" || c.dotIdx == -1 {
+	if c == nil || c.fn == "" || c.dotIdx < 0 || c.dotIdx >= len(c.fn)-1 {
 		return ""
 	}
-	if c.dotIdx == 0 {
-		return c.fn
-	}
-
-	// Return a copy of the function name
-	return string([]byte(c.fn[c.dotIdx+1:]))
+	return c.fn[c.dotIdx+1:]
 }
 
 // FullFunction returns the full function name including package.
 func (c *callerInfo) FullFunction() string {
+	if c == nil {
+		return ""
+	}
 	return c.fn
 }
 
 // Package returns the full import path of the package.
 func (c *callerInfo) Package() string {
-	if c.fn == "" || c.dotIdx == 0 {
+	if c == nil || c.fn == "" || c.dotIdx <= 0 {
 		return ""
 	}
-	if c.dotIdx == -1 {
-		return c.fn
-	}
-
-	// Return a copy of the package path
-	return string([]byte(c.fn[:c.dotIdx]))
+	return c.fn[:c.dotIdx]
 }
 
 // PackageName returns the name of the package without the directory.
+// It returns an empty string if the package name cannot be determined.
 func (c *callerInfo) PackageName() string {
-	if c.fn == "" || c.dotIdx == 0 {
+	pkg := c.Package()
+	if pkg == "" {
 		return ""
 	}
-
-	pkg := c.fn
-	if c.dotIdx != -1 {
-		pkg = c.fn[:c.dotIdx]
-	}
-
 	return filepath.Base(pkg)
 }
 
@@ -244,13 +265,44 @@ func (c *callerInfo) String() string {
 	return c.ShortLocation()
 }
 
+// Equal reports whether this caller is semantically equal to another.
+// It ignores cached/internal fields like dotIdx.
+// A nil caller is not considered equal to any other caller, including another nil.
+func (c *callerInfo) Equal(other Caller) bool {
+	// A nil receiver or an untyped nil interface parameter are never equal
+	if c == nil || other == nil {
+		return false
+	}
+
+	// Fast path comparison for callerInfo
+	if oc, ok := other.(*callerInfo); ok {
+		if oc == nil {
+			return false // other is a typed nil
+		}
+		if c == oc {
+			return true // same pointer
+		}
+		return c.file == oc.file &&
+			c.line == oc.line &&
+			c.fn == oc.fn
+	}
+
+	// Fallback for other implementations of the Caller interface
+	return c.file == other.File() &&
+		int(c.line) == other.Line() &&
+		c.fn == other.FullFunction()
+}
+
 // MarshalJSON implements the json.Marshaler interface.
 func (c *callerInfo) MarshalJSON() ([]byte, error) {
+	if c == nil {
+		return []byte("null"), nil
+	}
 	return json.Marshal(struct {
-		File     string `json:"file"`
-		Line     int    `json:"line"`
-		Function string `json:"function"`
-		Package  string `json:"package"`
+		File     string `json:"file,omitempty"`
+		Line     int    `json:"line,omitempty"`
+		Function string `json:"function,omitempty"`
+		Package  string `json:"package,omitempty"`
 	}{
 		File:     c.file,
 		Line:     int(c.line),
@@ -302,26 +354,25 @@ func (c *callerInfo) UnmarshalJSON(data []byte) error {
 
 // LogValue constructs and returns a slog.Value representing the caller information.
 // It includes attributes such as the file name, line number, function name,
-// and package if they are available. If no attributes are available, it returns
-// an empty slog.Value.
+// and package if they are available.
+// For an invalid or nil caller, it returns an empty slog.Value.
 func (c *callerInfo) LogValue() slog.Value {
-	attrs := make([]slog.Attr, 0, 4)
-
-	if c.file != "" {
-		attrs = append(attrs, slog.String("file", c.file))
+	if !c.Valid() {
+		return slog.Value{}
 	}
-	if c.line > 0 {
-		attrs = append(attrs, slog.Int("line", int(c.line)))
+
+	attrs := make([]slog.Attr, 0, 4)
+	if file := c.File(); file != "" {
+		attrs = append(attrs, slog.String("file", file))
+		if line := c.Line(); line > 0 {
+			attrs = append(attrs, slog.Int("line", line))
+		}
 	}
 	if fn := c.Function(); fn != "" {
 		attrs = append(attrs, slog.String("function", fn))
 	}
 	if pkg := c.Package(); pkg != "" {
 		attrs = append(attrs, slog.String("package", pkg))
-	}
-
-	if len(attrs) == 0 {
-		return slog.Value{}
 	}
 
 	return slog.GroupValue(attrs...)
@@ -338,10 +389,10 @@ func functionNameIndex(name string) int {
 		return -1
 	}
 
-	// Extract the base name
+	// Extract the base name (part after the last slash)
 	base := name
 	lastSlash := strings.LastIndexByte(name, '/') + 1
-	if lastSlash != 0 {
+	if lastSlash > 0 {
 		base = name[lastSlash:]
 	}
 
