@@ -68,19 +68,31 @@ func TestNew(t *testing.T) {
 			t.Logf("Function() = %q (this might change with Go versions)", c.Function())
 		}
 	})
+}
 
-	t.Run("invalid skip", func(t *testing.T) {
-		if c := New(-1); c != nil {
-			t.Errorf("New(-1) = %v, want nil", c)
-		}
-		if c := New(-100); c != nil {
-			t.Errorf("New(-100) = %v, want nil", c)
-		}
-		// A very large skip that should be out of bounds
-		if c := New(10000); c != nil {
-			t.Errorf("New(10000) = %v, want nil", c)
-		}
-	})
+// TestNewWithInvalidSkip tests the New function with invalid skip values.
+// It verifies that New correctly returns nil for invalid skips.
+func TestNewWithInvalidSkip(t *testing.T) {
+	tests := []struct {
+		name string
+		skip int
+		want *callerInfo
+	}{
+		{"invalid skip -1", -1, nil},
+		{"invalid skip -100", -100, nil},
+		{"large skip", 10000, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := New(tt.skip)
+			if tt.want == nil && c != nil {
+				t.Errorf("New(%d) = %v, want nil", tt.skip, c)
+			}
+			if tt.want != nil && c == nil {
+				t.Errorf("New(%d) = nil, want %v", tt.skip, tt.want)
+			}
+		})
+	}
 }
 
 // TestImmediate tests Immediate() by calling it and validating the resulting
@@ -517,7 +529,7 @@ func TestCallerInfo_MarshalJSON(t *testing.T) {
 
 	t.Run("nil receiver", func(t *testing.T) {
 		var c *callerInfo
-		b, err := json.Marshal(c)
+		b, err := c.MarshalJSON()
 		if err != nil {
 			t.Fatalf("MarshalJSON(nil) error = %v", err)
 		}
@@ -585,7 +597,7 @@ func TestCallerInfo_UnmarshalJSON(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var got callerInfo
-			err := json.Unmarshal([]byte(tc.jsonData), &got)
+			err := got.UnmarshalJSON([]byte(tc.jsonData))
 
 			if tc.expectErr {
 				if err == nil {
