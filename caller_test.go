@@ -27,6 +27,7 @@ func nestedTestFunc(skip int) Caller {
 // distance from the current frame.
 func TestNew(t *testing.T) {
 	t.Run("immediate caller", func(t *testing.T) {
+		t.Parallel()
 		c := testFunc() // This line is where the call is made
 		if c == nil {
 			t.Fatal("New(0) from testFunc returned nil")
@@ -50,6 +51,7 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("skip caller", func(t *testing.T) {
+		t.Parallel()
 		// The caller of nestedTestFunc is this function.
 		c := nestedTestFunc(0)
 		if c == nil {
@@ -73,6 +75,8 @@ func TestNew(t *testing.T) {
 // TestNewWithInvalidSkip tests the New function with invalid skip values.
 // It verifies that New correctly returns nil for invalid skips.
 func TestNewWithInvalidSkip(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		skip int
@@ -82,8 +86,10 @@ func TestNewWithInvalidSkip(t *testing.T) {
 		{"invalid skip -100", -100, nil},
 		{"large skip", 10000, nil},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			c := New(tt.skip)
 			if tt.want == nil && c != nil {
 				t.Errorf("New(%d) = %v, want nil", tt.skip, c)
@@ -99,6 +105,7 @@ func TestNewWithInvalidSkip(t *testing.T) {
 // Caller against the runtime.Caller(0) information. It checks that the file,
 // line, and function names match.
 func TestImmediate(t *testing.T) {
+	t.Parallel()
 	c := Immediate() // This line is where the call is made
 	if c == nil {
 		t.Fatal("Immediate() returned nil")
@@ -121,11 +128,42 @@ func TestImmediate(t *testing.T) {
 	}
 }
 
+// TestNewEmpty tests that NewEmpty returns a usable, invalid placeholder
+// Caller, and that it can be used as a destination for json.Unmarshal --
+// the pattern documented in the README, which previously failed because
+// Caller is a non-empty interface and callerInfo is unexported.
+func TestNewEmpty(t *testing.T) {
+	t.Parallel()
+	c := NewEmpty()
+	if c == nil {
+		t.Fatal("NewEmpty() returned nil")
+	}
+	if c.Valid() {
+		t.Error("NewEmpty() should not be Valid() before unmarshaling")
+	}
+
+	data := []byte(`{"file":"test.go","line":123,"function":"MyFunc","package":"my/pkg"}`)
+	if err := json.Unmarshal(data, &c); err != nil {
+		t.Fatalf("json.Unmarshal into NewEmpty() failed: %v", err)
+	}
+
+	if got, want := c.Location(), "test.go:123"; got != want {
+		t.Errorf("Location() = %q, want %q", got, want)
+	}
+	if got, want := c.Function(), "MyFunc"; got != want {
+		t.Errorf("Function() = %q, want %q", got, want)
+	}
+	if got, want := c.PackageName(), "pkg"; got != want {
+		t.Errorf("PackageName() = %q, want %q", got, want)
+	}
+}
+
 // TestNewFromPC tests the NewFromPC function and verifies that it
 // correctly captures the caller information based on the provided
 // program counter. It tests both valid and invalid PCs.
 func TestNewFromPC(t *testing.T) {
 	t.Run("valid pc", func(t *testing.T) {
+		t.Parallel()
 		pc, file, line, ok := runtime.Caller(0)
 		if !ok {
 			t.Fatal("runtime.Caller(0) failed")
@@ -148,6 +186,7 @@ func TestNewFromPC(t *testing.T) {
 	})
 
 	t.Run("invalid pc", func(t *testing.T) {
+		t.Parallel()
 		if c := NewFromPC(0); c != nil {
 			t.Errorf("NewFromPC(0) should return nil, but got %v", c)
 		}
@@ -192,6 +231,8 @@ func (m *mockCaller) Equal(other Caller) bool {
 // It checks the comparison of equal and non-equal values, including
 // nil interface values and concrete types, as well as different types.
 func TestCallerInfo_Equal(t *testing.T) {
+	t.Parallel()
+
 	base := &callerInfo{file: "main.go", line: 10, fn: "main.main", dotIdx: 4}
 	baseIdentical := &callerInfo{file: "main.go", line: 10, fn: "main.main", dotIdx: 99}
 	baseDiffFile := &callerInfo{file: "other.go", line: 10, fn: "main.main", dotIdx: 4}
@@ -222,12 +263,14 @@ func TestCallerInfo_Equal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.c != nil {
-				tt.c.dotIdx = functionNameIndex(tt.c.fn)
-			}
-			if oc, ok := tt.other.(*callerInfo); ok && oc != nil {
-				oc.dotIdx = functionNameIndex(oc.fn)
-			}
+			t.Parallel()
+			// dotIdx is intentionally left as set in the literals above (including
+			// baseIdentical's deliberately different value) and never recomputed
+			// here: Equal() does not read dotIdx, and several of these callerInfo
+			// pointers (base, baseIdentical, baseDiffFile, ...) are deliberately
+			// shared across multiple table rows above, so mutating them from
+			// inside a subtest is a data race waiting to happen the moment these
+			// subtests run concurrently (e.g. via t.Parallel()).
 			if got := tt.c.Equal(tt.other); got != tt.equal {
 				t.Errorf("a.Equal(b) = %v, want %v", got, tt.equal)
 			}
@@ -253,6 +296,8 @@ func TestCallerInfo_Equal(t *testing.T) {
 // TestCallerInfo_Valid tests the Valid method of callerInfo, ensuring it
 // correctly identifies valid and invalid callerInfo values.
 func TestCallerInfo_Valid(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		c    *callerInfo
@@ -267,9 +312,7 @@ func TestCallerInfo_Valid(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.c != nil {
-				tt.c.dotIdx = functionNameIndex(tt.c.fn)
-			}
+			t.Parallel()
 			if got := tt.c.Valid(); got != tt.want {
 				t.Errorf("Valid() = %v, want %v", got, tt.want)
 			}
@@ -281,6 +324,8 @@ func TestCallerInfo_Valid(t *testing.T) {
 // correctly extracts the file name from a valid callerInfo value, and
 // returns an empty string for invalid values.
 func TestCallerInfo_File(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		c    *callerInfo
@@ -293,9 +338,7 @@ func TestCallerInfo_File(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.c != nil {
-				tt.c.dotIdx = functionNameIndex(tt.c.fn)
-			}
+			t.Parallel()
 			if got := tt.c.File(); got != tt.want {
 				t.Errorf("File() = %q, want %q", got, tt.want)
 			}
@@ -307,6 +350,8 @@ func TestCallerInfo_File(t *testing.T) {
 // correctly extracts the line number from a valid callerInfo value, and
 // returns 0 for invalid values.
 func TestCallerInfo_Line(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		c    *callerInfo
@@ -318,9 +363,7 @@ func TestCallerInfo_Line(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.c != nil {
-				tt.c.dotIdx = functionNameIndex(tt.c.fn)
-			}
+			t.Parallel()
 			if got := tt.c.Line(); got != tt.want {
 				t.Errorf("Line() = %d, want %d", got, tt.want)
 			}
@@ -331,6 +374,8 @@ func TestCallerInfo_Line(t *testing.T) {
 // TestCallerInfo_Location tests the Location method of callerInfo, ensuring it
 // correctly formats strings with file:line.
 func TestCallerInfo_Location(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		c    *callerInfo
@@ -344,9 +389,7 @@ func TestCallerInfo_Location(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.c != nil {
-				tt.c.dotIdx = functionNameIndex(tt.c.fn)
-			}
+			t.Parallel()
 			if got := tt.c.Location(); got != tt.want {
 				t.Errorf("Location() = %q, want %q", got, tt.want)
 			}
@@ -357,6 +400,8 @@ func TestCallerInfo_Location(t *testing.T) {
 // TestCallerInfo_ShortLocationAndString tests the ShortLocation and String methods of callerInfo,
 // ensuring they correctly format strings with file:line or just filename.
 func TestCallerInfo_ShortLocationAndString(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		c    *callerInfo
@@ -370,9 +415,7 @@ func TestCallerInfo_ShortLocationAndString(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.c != nil {
-				tt.c.dotIdx = functionNameIndex(tt.c.fn)
-			}
+			t.Parallel()
 			if got := tt.c.ShortLocation(); got != tt.want {
 				t.Errorf("ShortLocation() = %q, want %q", got, tt.want)
 			}
@@ -388,6 +431,8 @@ func TestCallerInfo_ShortLocationAndString(t *testing.T) {
 // function names without packages, method names on types, full path function names, full path
 // method names, function names with no package, and function names with a dot prefix.
 func TestCallerInfo_Function(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		c    *callerInfo
@@ -395,19 +440,17 @@ func TestCallerInfo_Function(t *testing.T) {
 	}{
 		{"nil receiver", nil, ""},
 		{"zero value caller", &callerInfo{}, ""},
-		{"function without package", &callerInfo{fn: "main"}, ""},
-		{"function with package", &callerInfo{fn: "pkg.Func"}, "Func"},
-		{"method on type", &callerInfo{fn: "pkg.(*Type).Method"}, "(*Type).Method"},
-		{"full path function", &callerInfo{fn: "github.com/user/repo.Func"}, "Func"},
-		{"full path method", &callerInfo{fn: "github.com/user/repo.(*Type).Method"}, "(*Type).Method"},
-		{"no function name", &callerInfo{fn: "pkg."}, ""},
-		{"dot prefix", &callerInfo{fn: ".Func"}, "Func"},
+		{"function without package", &callerInfo{fn: "main", dotIdx: functionNameIndex("main")}, ""},
+		{"function with package", &callerInfo{fn: "pkg.Func", dotIdx: functionNameIndex("pkg.Func")}, "Func"},
+		{"method on type", &callerInfo{fn: "pkg.(*Type).Method", dotIdx: functionNameIndex("pkg.(*Type).Method")}, "(*Type).Method"},
+		{"full path function", &callerInfo{fn: "github.com/user/repo.Func", dotIdx: functionNameIndex("github.com/user/repo.Func")}, "Func"},
+		{"full path method", &callerInfo{fn: "github.com/user/repo.(*Type).Method", dotIdx: functionNameIndex("github.com/user/repo.(*Type).Method")}, "(*Type).Method"},
+		{"no function name", &callerInfo{fn: "pkg.", dotIdx: functionNameIndex("pkg.")}, ""},
+		{"dot prefix", &callerInfo{fn: ".Func", dotIdx: functionNameIndex(".Func")}, "Func"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.c != nil {
-				tt.c.dotIdx = functionNameIndex(tt.c.fn)
-			}
+			t.Parallel()
 			if got := tt.c.Function(); got != tt.want {
 				t.Errorf("Function() = %q, want %q", got, tt.want)
 			}
@@ -416,6 +459,8 @@ func TestCallerInfo_Function(t *testing.T) {
 }
 
 func TestCallerInfo_FullFunction(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		c    *callerInfo
@@ -433,9 +478,7 @@ func TestCallerInfo_FullFunction(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.c != nil {
-				tt.c.dotIdx = functionNameIndex(tt.c.fn)
-			}
+			t.Parallel()
 			if got := tt.c.FullFunction(); got != tt.want {
 				t.Errorf("FullFunction() = %q, want %q", got, tt.want)
 			}
@@ -448,26 +491,26 @@ func TestCallerInfo_FullFunction(t *testing.T) {
 // function names without packages, method names on types, full path function names, full path
 // method names, function names with no package, and function names with a dot prefix.
 func TestCallerInfo_Package(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		c    *callerInfo
 		want string
 	}{
-		{"empty name", &callerInfo{fn: ""}, ""},
+		{"empty name", &callerInfo{fn: "", dotIdx: functionNameIndex("")}, ""},
 		{"nil receiver", nil, ""},
-		{"function without package", &callerInfo{fn: "main"}, ""}, // no dot
-		{"function with package", &callerInfo{fn: "pkg.Func"}, "pkg"},
-		{"method on type", &callerInfo{fn: "pkg.(*Type).Method"}, "pkg"},
-		{"full path function", &callerInfo{fn: "github.com/user/repo.Func"}, "github.com/user/repo"},
-		{"full path method", &callerInfo{fn: "github.com/user/repo.(*Type).Method"}, "github.com/user/repo"},
-		{"no function name", &callerInfo{fn: "pkg."}, "pkg"},
-		{"no package name", &callerInfo{fn: ".Func"}, ""},
+		{"function without package", &callerInfo{fn: "main", dotIdx: functionNameIndex("main")}, ""}, // no dot
+		{"function with package", &callerInfo{fn: "pkg.Func", dotIdx: functionNameIndex("pkg.Func")}, "pkg"},
+		{"method on type", &callerInfo{fn: "pkg.(*Type).Method", dotIdx: functionNameIndex("pkg.(*Type).Method")}, "pkg"},
+		{"full path function", &callerInfo{fn: "github.com/user/repo.Func", dotIdx: functionNameIndex("github.com/user/repo.Func")}, "github.com/user/repo"},
+		{"full path method", &callerInfo{fn: "github.com/user/repo.(*Type).Method", dotIdx: functionNameIndex("github.com/user/repo.(*Type).Method")}, "github.com/user/repo"},
+		{"no function name", &callerInfo{fn: "pkg.", dotIdx: functionNameIndex("pkg.")}, "pkg"},
+		{"no package name", &callerInfo{fn: ".Func", dotIdx: functionNameIndex(".Func")}, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.c != nil {
-				tt.c.dotIdx = functionNameIndex(tt.c.fn)
-			}
+			t.Parallel()
 			if got := tt.c.Package(); got != tt.want {
 				t.Errorf("Package() = %q, want %q", got, tt.want)
 			}
@@ -481,24 +524,24 @@ func TestCallerInfo_Package(t *testing.T) {
 // full path function names, full path method names, function names with no package,
 // and function names with a dot prefix.
 func TestCallerInfo_PackageName(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		c    *callerInfo
 		want string
 	}{
-		{"empty name", &callerInfo{fn: ""}, ""},
+		{"empty name", &callerInfo{fn: "", dotIdx: functionNameIndex("")}, ""},
 		{"nil receiver", nil, ""},
-		{"function with package", &callerInfo{fn: "pkg.Func"}, "pkg"},
-		{"full path function", &callerInfo{fn: "github.com/user/repo.Func"}, "repo"},
-		{"full path method", &callerInfo{fn: "github.com/user/repo.(*Type).Method"}, "repo"},
-		{"no function name", &callerInfo{fn: "pkg."}, "pkg"},
-		{"no package", &callerInfo{fn: "main"}, ""},
+		{"function with package", &callerInfo{fn: "pkg.Func", dotIdx: functionNameIndex("pkg.Func")}, "pkg"},
+		{"full path function", &callerInfo{fn: "github.com/user/repo.Func", dotIdx: functionNameIndex("github.com/user/repo.Func")}, "repo"},
+		{"full path method", &callerInfo{fn: "github.com/user/repo.(*Type).Method", dotIdx: functionNameIndex("github.com/user/repo.(*Type).Method")}, "repo"},
+		{"no function name", &callerInfo{fn: "pkg.", dotIdx: functionNameIndex("pkg.")}, "pkg"},
+		{"no package", &callerInfo{fn: "main", dotIdx: functionNameIndex("main")}, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.c != nil {
-				tt.c.dotIdx = functionNameIndex(tt.c.fn)
-			}
+			t.Parallel()
 			if got := tt.c.PackageName(); got != tt.want {
 				t.Errorf("PackageName() = %q, want %q", got, tt.want)
 			}
@@ -510,7 +553,10 @@ func TestCallerInfo_PackageName(t *testing.T) {
 // ensuring it correctly marshals a callerInfo object to JSON,
 // including handling of omitempty fields.
 func TestCallerInfo_MarshalJSON(t *testing.T) {
+	t.Parallel()
+
 	t.Run("valid caller", func(t *testing.T) {
+		t.Parallel()
 		c := &callerInfo{
 			file:   "test.go",
 			line:   123,
@@ -528,6 +574,7 @@ func TestCallerInfo_MarshalJSON(t *testing.T) {
 	})
 
 	t.Run("nil receiver", func(t *testing.T) {
+		t.Parallel()
 		var c *callerInfo
 		b, err := c.MarshalJSON()
 		if err != nil {
@@ -544,6 +591,8 @@ func TestCallerInfo_MarshalJSON(t *testing.T) {
 // ensuring it correctly unmarshals JSON into a callerInfo object,
 // including handling of omitempty fields and invalid data.
 func TestCallerInfo_UnmarshalJSON(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name      string
 		jsonData  string
@@ -587,15 +636,16 @@ func TestCallerInfo_UnmarshalJSON(t *testing.T) {
 			expectErr: true,
 		},
 		{
-			name:      "line too large",
-			jsonData:  `{"line":65536}`,
-			want:      &callerInfo{},
-			expectErr: true,
+			name:      "large line number no longer truncated",
+			jsonData:  `{"file":"test.go","line":100000,"function":"MyFunc","package":"my/pkg"}`,
+			want:      &callerInfo{file: "test.go", line: 100000, fn: "my/pkg.MyFunc"},
+			expectErr: false,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			var got callerInfo
 			err := got.UnmarshalJSON([]byte(tc.jsonData))
 
@@ -608,8 +658,8 @@ func TestCallerInfo_UnmarshalJSON(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			// Re-calc dotIdx for comparison
-			tc.want.dotIdx = functionNameIndex(tc.want.fn)
+			// Note: no dotIdx recompute needed here -- Equal() (used below)
+			// never reads dotIdx.
 			if !got.Equal(tc.want) {
 				t.Errorf("UnmarshalJSON() got = %+v, want %+v", got, tc.want)
 			}
@@ -622,6 +672,8 @@ func TestCallerInfo_UnmarshalJSON(t *testing.T) {
 // caller information. It includes attributes such as the file name, line
 // number, function name, and package if they are available.
 func TestCallerInfo_LogValue(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		name   string
 		caller *callerInfo
@@ -676,6 +728,7 @@ func TestCallerInfo_LogValue(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got := tc.caller.LogValue()
 
 			if tc.want.Kind() == slog.KindAny && tc.want.Any() == nil {
@@ -708,6 +761,8 @@ func TestCallerInfo_LogValue(t *testing.T) {
 }
 
 func TestFunctionNameIndex(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		fn   string
@@ -724,30 +779,9 @@ func TestFunctionNameIndex(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			if got := functionNameIndex(tt.fn); got != tt.want {
 				t.Errorf("functionNameIndex(%q) = %v, want %v", tt.fn, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestSafeUint16(t *testing.T) {
-	tests := []struct {
-		name  string
-		value int
-		want  uint16
-		ok    bool
-	}{
-		{"zero", 0, 0, true},
-		{"max", 65535, 65535, true},
-		{"negative", -1, 0, false},
-		{"too large", 65536, 0, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, ok := safeUint16(tt.value)
-			if got != tt.want || ok != tt.ok {
-				t.Errorf("safeUint16(%d) = %v, %v, want %v, %v", tt.value, got, ok, tt.want, tt.ok)
 			}
 		})
 	}
@@ -776,7 +810,7 @@ func BenchmarkCallerOverhead(b *testing.B) {
 
 	b.Run("without caller", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			pc, file, line, ok = runtime.Caller(0)
 			if ok {
 				if f := runtime.FuncForPC(pc); f != nil {
@@ -790,7 +824,7 @@ func BenchmarkCallerOverhead(b *testing.B) {
 
 	b.Run("with caller", func(b *testing.B) {
 		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			c = New(0)
 			file, line, fn = c.File(), c.Line(), c.Function()
 		}
@@ -807,8 +841,8 @@ func BenchmarkStringOperations(b *testing.B) {
 	b.Run("string concat", func(b *testing.B) {
 		b.ReportAllocs()
 		var s string
-		for i := 0; i < b.N; i++ {
-			s = c.file + ":" + strconv.Itoa(int(c.line))
+		for range b.N {
+			s = c.file + ":" + strconv.Itoa(c.line)
 		}
 		// Use the result to avoid optimization
 		globalString = s
@@ -817,7 +851,7 @@ func BenchmarkStringOperations(b *testing.B) {
 	b.Run("builder with append", func(b *testing.B) {
 		b.ReportAllocs()
 		var s string
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			var sb strings.Builder
 			sb.WriteString(c.file)
 			sb.WriteByte(':')
@@ -831,11 +865,11 @@ func BenchmarkStringOperations(b *testing.B) {
 	b.Run("builder with itoa", func(b *testing.B) {
 		b.ReportAllocs()
 		var s string
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			var sb strings.Builder
 			sb.WriteString(c.file)
 			sb.WriteByte(':')
-			sb.WriteString(strconv.Itoa(int(c.line)))
+			sb.WriteString(strconv.Itoa(c.line))
 			s = sb.String()
 		}
 		// Use the result to avoid optimization
@@ -845,7 +879,7 @@ func BenchmarkStringOperations(b *testing.B) {
 	b.Run("builder with grow", func(b *testing.B) {
 		b.ReportAllocs()
 		var s string
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			var sb strings.Builder
 			sb.Grow(len(c.file) + 10)
 			sb.WriteString(c.file)
@@ -860,7 +894,7 @@ func BenchmarkStringOperations(b *testing.B) {
 	b.Run("builder proper", func(b *testing.B) {
 		b.ReportAllocs()
 		var s string
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			var sb strings.Builder
 			line := strconv.Itoa(c.Line())
 			sb.Grow(len(c.file) + len(line) + 1)

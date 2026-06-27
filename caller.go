@@ -8,7 +8,7 @@ using the Go runtime and formats it in a developer-friendly way.
 
 Example usage:
 
-	import "github.com/balinomad/go-caller"
+	import "github.com/balinomad/go-caller/v2"
 
 	func someFunc() {
 		c := caller.Immediate()
@@ -81,7 +81,7 @@ type Caller interface {
 // and to force limitations.
 type callerInfo struct {
 	file   string // File name
-	line   uint16 // Line number
+	line   int    // Line number
 	fn     string // Function name
 	dotIdx int    // Index of the function name dot separator within the full name
 }
@@ -115,18 +115,22 @@ func New(skip int) Caller {
 		fullFunc = f.Name()
 	}
 
-	// Validate the line
-	lineUint, ok := safeUint16(line)
-	if !ok {
-		lineUint = 0
-	}
-
 	return &callerInfo{
 		file:   file,
-		line:   lineUint,
+		line:   line,
 		fn:     fullFunc,
 		dotIdx: functionNameIndex(fullFunc),
 	}
+}
+
+// NewEmpty returns a Caller with no information populated, suitable as a
+// destination for json.Unmarshal. Because callerInfo is unexported, this
+// is the only way for external packages to obtain a concrete, non-nil
+// Caller to unmarshal into directly (json.Unmarshal cannot construct one
+// on its own, since Caller is a non-empty interface).
+// The returned Caller reports Valid() == false until it is populated.
+func NewEmpty() Caller {
+	return &callerInfo{dotIdx: -1}
 }
 
 // Immediate returns a Caller for the immediate caller of the function
@@ -139,13 +143,14 @@ func Immediate() Caller {
 // NewFromPC returns a new Caller with source information populated
 // based on the provided program counter.
 // It returns nil if the caller cannot be determined.
+//
+// pc must be a call-site program counter, such as the first return
+// value of runtime.Caller. Program counters captured via runtime.Callers
+// are return addresses, not call-site addresses; passing one of those
+// directly to NewFromPC can resolve to the wrong line, or even an
+// unrelated function. Subtract 1 from a runtime.Callers value before
+// passing it here, or resolve frames with runtime.CallersFrames instead.
 func NewFromPC(pc uintptr) Caller {
-	var (
-		fullFunc string
-		file     string
-		line     int
-	)
-
 	// Get the full function name
 	f := runtime.FuncForPC(pc)
 	if f == nil {
@@ -153,18 +158,11 @@ func NewFromPC(pc uintptr) Caller {
 	}
 
 	// Get the full function name, file, and line
-	fullFunc = f.Name()
-	file, line = f.FileLine(pc)
-
-	// Validate the line
-	lineUint, ok := safeUint16(line)
-	if !ok {
-		lineUint = 0
-	}
-
+	fullFunc := f.Name()
+	file, line := f.FileLine(pc)
 	return &callerInfo{
 		file:   file,
-		line:   lineUint,
+		line:   line,
 		fn:     fullFunc,
 		dotIdx: functionNameIndex(fullFunc),
 	}
@@ -188,7 +186,7 @@ func (c *callerInfo) Line() int {
 	if c == nil {
 		return 0
 	}
-	return int(c.line)
+	return c.line
 }
 
 // Location returns a formatted string with file:line.
@@ -289,7 +287,7 @@ func (c *callerInfo) Equal(other Caller) bool {
 
 	// Fallback for other implementations of the Caller interface
 	return c.file == other.File() &&
-		int(c.line) == other.Line() &&
+		c.line == other.Line() &&
 		c.fn == other.FullFunction()
 }
 
@@ -298,17 +296,21 @@ func (c *callerInfo) MarshalJSON() ([]byte, error) {
 	if c == nil {
 		return []byte("null"), nil
 	}
-	return json.Marshal(struct {
+	b, err := json.Marshal(struct {
 		File     string `json:"file,omitempty"`
 		Line     int    `json:"line,omitempty"`
 		Function string `json:"function,omitempty"`
 		Package  string `json:"package,omitempty"`
 	}{
 		File:     c.file,
-		Line:     int(c.line),
+		Line:     c.line,
 		Function: c.Function(),
 		Package:  c.Package(),
 	})
+	if err != nil {
+		return nil, fmt.Errorf("JSON marshal: %w", err)
+	}
+	return b, nil
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface.
@@ -321,17 +323,16 @@ func (c *callerInfo) UnmarshalJSON(data []byte) error {
 	}
 
 	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
+		return fmt.Errorf("JSON unmarshal: %w", err)
 	}
 
 	c.file = aux.File
 
 	// Validate and set line
-	line, ok := safeUint16(aux.Line)
-	if !ok {
+	if aux.Line < 0 {
 		return fmt.Errorf("invalid line number: %d", aux.Line)
 	}
-	c.line = line
+	c.line = aux.Line
 
 	// Early return if Function is empty
 	if aux.Function == "" {
@@ -402,13 +403,4 @@ func functionNameIndex(name string) int {
 	}
 
 	return -1
-}
-
-// safeUint16 converts an int to a uint16.
-// Returns false if the value is out of range.
-func safeUint16(value int) (uint16, bool) {
-	if value < 0 || value > int(^uint16(0)) {
-		return 0, false
-	}
-	return uint16(value), true
 }
