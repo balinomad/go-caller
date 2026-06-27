@@ -19,6 +19,8 @@ jobs:
   validate:
     name: Validate, Lint & Vulncheck
     runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
@@ -30,8 +32,6 @@ jobs:
           cache: true
 
       - name: Run go mod tidy
-        env:
-          CGO_ENABLED: "0"
         run: go mod tidy
 
       - name: Fail if go.mod or go.sum are dirty
@@ -43,7 +43,7 @@ jobs:
           fi
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
           args: --timeout=3m
@@ -72,7 +72,7 @@ jobs:
 
       - name: Set up Go (from go.mod)
         if: matrix.go == 'go.mod'
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
           cache: true
