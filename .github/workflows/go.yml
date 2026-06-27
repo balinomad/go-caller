@@ -82,15 +82,6 @@ jobs:
         with:
           go-version: "stable"
 
-      - name: Validate Go installation
-        shell: bash
-        run: |
-          if ! command -v go &> /dev/null; then
-            echo "::error::Go binary not found. Provisioning failed."
-            exit 1
-          fi
-          go version
-
       - name: Build
         run: go build -v ./...
 
