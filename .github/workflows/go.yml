@@ -1,36 +1,71 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
 name: Go
 
 on:
   push:
-    branches: ["master"]
+    branches: ["*"]
   pull_request:
-    branches: ["master"]
+    branches: ["*"]
+
+# Cancel in-progress runs on the same branch when a new push arrives.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Secure default permissions mapping: prevent privilege escalation
+permissions:
+  contents: read
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.os }}, Go ${{ matrix.go }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    env:
+      CGO_ENABLED: "0"
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go: ["go.mod", "stable"]
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Read minimum Go version from go.mod
-        id: goversion
-        run: echo "GO_VERSION=$(grep '^go ' go.mod | cut -d' ' -f2)" >> $GITHUB_ENV
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      - name: Set up Go (from go.mod)
+        if: matrix.go == 'go.mod'
+        uses: actions/setup-go@v5
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: "go.mod"
+
+      - name: Set up Go (stable)
+        if: matrix.go == 'stable'
+        uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+
+      - name: Verify go.mod is tidy
+        run: go mod tidy && git diff --exit-code go.mod go.sum
 
       - name: Build
         run: go build -v ./...
 
-      - name: Test with coverage
-        run: go test -v -covermode=count -coverprofile=coverage.txt ./...
+      - name: Vet
+        run: go vet ./...
+
+      - name: Run tests with race detector (Linux)
+        if: runner.os == 'Linux'
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race -count=1 -shuffle=on -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Run tests (macOS / Windows)
+        if: runner.os != 'Linux'
+        run: go test -count=1 -shuffle=on ./...
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+        if: matrix.os == 'ubuntu-latest' && matrix.go == 'go.mod'
+        uses: codecov/codecov-action@v7
         with:
+          files: coverage.out
           token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false

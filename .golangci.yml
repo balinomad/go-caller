@@ -1,0 +1,194 @@
+# golangci-lint v2 configuration for go-csp.
+# Run: golangci-lint run ./...
+
+version: "2"
+
+run:
+  timeout: 5m
+  go: "1.22"
+  relative-path-mode: gomod
+
+linters:
+  default: none
+
+  enable:
+    # -- Correctness --
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+
+    # -- Security --
+    # All gosec rules run; see settings.gosec for the single exclusion.
+    - gosec
+
+    # -- Dependency policy --
+    - depguard
+
+    # -- Hot-path performance --
+    - prealloc # flag slice allocations that could be pre-allocated
+    - perfsprint # replace fmt.Sprintf with cheaper alternatives in hot path
+    - forbidigo # ban stdout, global log, and panic from library code
+
+    # -- Style and naming --
+    - revive # error-strings, exported GoDoc, context-as-argument, …
+    - gocritic # opinionated diagnostic, performance, and style checks
+    - errname # error type and variable naming conventions
+    - godot # GoDoc comments on exported declarations end with a period
+    - misspell # common English misspellings in source and comments
+    - nolintlint # every //nolint must name the linter and give a reason
+    - nonamedreturns # named return values reduce readability in library code
+
+    # -- Error handling --
+    - errorlint # errors.Is/As and %w wrapping correctness
+    - wrapcheck # errors from external packages must be wrapped with context
+    - nilerr # do not return a nil error from a nil-checking branch
+    - nilnil # (T, error) functions must not return (nil, nil)
+    - nilnesserr # nil interface wrapping gotcha — catches the classic Go trap
+
+    # -- Boot-time invariants --
+    - gochecknoinits # init() is prohibited; all setup must be in New()
+
+    # -- Concurrency and context --
+    - fatcontext # do not store large values in context in loops
+    - copyloopvar # Go 1.22+ loop variable copy correctness
+    - intrange # Go 1.22+ integer range idiom
+
+    # -- Testing --
+    - paralleltest # table-driven subtests should call t.Parallel()
+    - thelper # test helpers must call t.Helper()
+    - testableexamples # Example functions in a public library must be runnable
+
+    # -- Modern Go --
+    - modernize # replace deprecated patterns with current Go idioms
+    - exptostd # prefer stdlib over golang.org/x/exp equivalents when available
+
+    # -- Misc correctness --
+    - makezero # slice elements must not be appended to a zero-length slice incorrectly
+    - exhaustive # switch statements on named types must cover all cases
+    - unparam # remove parameters that are always called with the same value
+    - nakedret # named returns in long functions reduce auditability
+    - reassign # package-level variables must not be reassigned after init
+    - unconvert # remove redundant type conversions
+    - recvcheck # receiver type (value vs pointer) must be consistent per type
+    - cyclop # keep cyclomatic complexity under control
+
+  settings:
+    depguard:
+      rules:
+        strict-dependency-policy:
+          list-mode: strict
+          allow:
+            - $gostd
+
+    revive:
+      rules:
+        # Every exported identifier's GoDoc comment begins with
+        # its name and ends with a period.
+        - name: exported
+          arguments:
+            - check-private-receivers
+            - say-repetitive-instead-of-stutters
+        # error strings must start with a lowercase letter and must
+        # not end with a period or exclamation mark.
+        - name: error-strings
+        - name: error-return
+        - name: error-naming
+        - name: package-comments
+        - name: unexported-return
+        - name: var-declaration
+        - name: receiver-naming
+        - name: increment-decrement
+        - name: range
+        - name: waitgroup-by-value
+        - name: time-naming
+
+    godot:
+      # Enforce a trailing period on GoDoc comments for exported declarations.
+      scope: declarations
+      period: true
+      capital: false
+
+    nolintlint:
+      # Every suppression must name the specific linter and document the reason.
+      # An unexplained //nolint is a security smell.
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+
+    forbidigo:
+      forbid:
+        # Library code must not write to stdout — all output goes through the
+        # slog.Logger injected via WithLogger.
+        - pattern: "^fmt\\.Print(f|ln)?$"
+          msg: >-
+            library code must not write to stdout;
+            use the slog.Logger
+        # The global log package bypasses structured observability
+        # boundary and ignores the injected logger entirely.
+        - pattern: "^log\\.(Print|Fatal|Panic)"
+          msg: >-
+            global log package is forbidden in library code;
+            use the slog.Logger injected via WithLogger
+        # All runtime errors must be returned as error values.
+        # Test files are exempted via exclusions.rules below.
+        - pattern: "^panic$"
+          msg: >-
+            panic is mostly prohibited in library;
+            return an error value instead
+
+    errcheck:
+      # Unchecked type assertions can panic in production — flag all of them.
+      check-type-assertions: true
+      # Blank identifier discards are explicit failures; they must be justified.
+      check-blank: true
+
+    errorlint:
+      errorf: true
+      errorf-multi: true
+      asserts: true
+      comparison: true
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        - unnamedResult
+
+    perfsprint:
+      err-error: true
+      errorf: true
+      sprintf1: true
+
+    staticcheck:
+      checks:
+        - "all"
+
+    exhaustive:
+      # A default case is accepted as exhaustive coverage.
+      default-signifies-exhaustive: true
+
+    govet:
+      enable:
+        - shadow
+
+    cyclop:
+      max-complexity: 15
+
+  exclusions:
+    rules:
+      # Test files: relax rules that follow idiomatic Go test patterns and
+      # would generate false positives in test scaffolding.
+      - path: "_test\\.go$"
+        linters:
+          - wrapcheck # test helpers return intentionally bare errors
+          - exhaustive # table-driven test maps are not enum switches
+
+output:
+  formats:
+    text:
+      colors: true
+  show-stats: true
