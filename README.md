@@ -8,15 +8,16 @@
 
 # caller
 
-*A lightweight and idiomatic Go library that captures and formats caller information such as file name, line number, function name, and package path.*
+_A lightweight and idiomatic Go library that captures and formats caller information such as file name, line number, function name, and package path._
 
 Perfect for use in:
+
 - Custom error types
 - Logging wrappers
 - Debugging utilities
 - Tracing and instrumentation
 
-## ✨ Features
+## Features
 
 - Minimal and dependency-free
 - Clean, consistent API with platform-independent file paths
@@ -27,7 +28,7 @@ Perfect for use in:
 - Implements `slog.LogValuer` interface for structured logging
 - Semantic equality comparison between callers
 
-## 📌 Installation
+## Installation
 
 ### For v2.x (latest)
 
@@ -35,7 +36,7 @@ Perfect for use in:
 go get github.com/balinomad/go-caller/v2@latest
 ```
 
-## 🚀 Usage
+## Usage
 
 ```go
 import "github.com/balinomad/go-caller/v2"
@@ -56,36 +57,36 @@ func someFunc() {
 }
 ```
 
-## 📘 API Reference
+## API Reference
 
 ### Constructor Functions
 
-| Function | Description |
-|----------|-------------|
-| `Immediate() Caller` | Returns caller info for the immediate caller |
-| `New(skip int) Caller` | Returns caller info with custom stack skip depth |
-| `NewFromPC(pc uintptr) Caller` | Creates caller info from a program counter |
+| Function                       | Description                                      |
+| ------------------------------ | ------------------------------------------------ |
+| `Immediate() Caller`           | Returns caller info for the immediate caller     |
+| `New(skip int) Caller`         | Returns caller info with custom stack skip depth |
+| `NewFromPC(pc uintptr) Caller` | Creates caller info from a program counter       |
 
 ### Caller Interface Methods
 
-| Method | Description | Example Output |
-|--------|-------------|----------------|
-| `Valid() bool` | Returns true if the caller info is usable | `true`/`false` |
-| `File() string` | Full file path | `/path/to/file.go` |
-| `Line() int` | Line number | `42` |
-| `Location() string` | Full location with file:line | `/path/to/file.go:42` |
-| `ShortLocation() string` | Short location with just filename:line | `file.go:42` |
-| `Function() string` | Function/method name without package | `MyFunction` |
-| `FullFunction() string` | Full function name including package | `github.com/user/pkg.MyFunction` |
-| `Package() string` | Full import path of the package | `github.com/user/pkg` |
-| `PackageName() string` | Last element of the package path | `pkg` |
-| `Equal(other Caller) bool` | Checks if two callers are semantically equal | `true`/`false` |
-| `String() string` | Returns `ShortLocation()` (implements `fmt.Stringer`) | `file.go:42` |
-| `MarshalJSON() ([]byte, error)` | Marshals caller info to JSON | `{"file":"...","line":42,...}` |
-| `UnmarshalJSON([]byte) error` | Unmarshals JSON to caller info | - |
-| `LogValue() slog.Value` | Returns structured value for slog | `{file:..., line:42, ...}` |
+| Method                          | Description                                           | Example Output                   |
+| ------------------------------- | ----------------------------------------------------- | -------------------------------- |
+| `Valid() bool`                  | Returns true if the caller info is usable             | `true`/`false`                   |
+| `File() string`                 | Full file path                                        | `/path/to/file.go`               |
+| `Line() int`                    | Line number                                           | `42`                             |
+| `Location() string`             | Full location with file:line                          | `/path/to/file.go:42`            |
+| `ShortLocation() string`        | Short location with just filename:line                | `file.go:42`                     |
+| `Function() string`             | Function/method name without package                  | `MyFunction`                     |
+| `FullFunction() string`         | Full function name including package                  | `github.com/user/pkg.MyFunction` |
+| `Package() string`              | Full import path of the package                       | `github.com/user/pkg`            |
+| `PackageName() string`          | Last element of the package path                      | `pkg`                            |
+| `Equal(other Caller) bool`      | Checks if two callers are semantically equal          | `true`/`false`                   |
+| `String() string`               | Returns `ShortLocation()` (implements `fmt.Stringer`) | `file.go:42`                     |
+| `MarshalJSON() ([]byte, error)` | Marshals caller info to JSON                          | `{"file":"...","line":42,...}`   |
+| `UnmarshalJSON([]byte) error`   | Unmarshals JSON to caller info                        | -                                |
+| `LogValue() slog.Value`         | Returns structured value for slog                     | `{file:..., line:42, ...}`       |
 
-## 🔧 Advanced Usage
+## Advanced Usage
 
 ### Custom Stack Depth
 
@@ -142,7 +143,7 @@ if c1.Equal(c2) {
 }
 ```
 
-## 🔄 Migration from v1 to v2
+## Migration from v1 to v2
 
 ### Breaking Changes
 
@@ -171,26 +172,29 @@ if c1.Equal(c2) {
 }
 ```
 
-## 📊 Performance
+## Performance
 
 The library is designed to be lightweight with minimal allocations:
+
 - Zero dependencies beyond Go standard library
 - Optimized string operations
 - Efficient memory usage with `uint16` for line numbers
 - Comprehensive benchmarks included in tests
 
-## 🧪 Testing
+## Testing
 
 Run tests with:
+
 ```bash
 go test -v
 ```
 
 Run benchmarks with:
+
 ```bash
 go test -bench=. -benchmem
 ```
 
-## ⚖️ License
+## License
 
 MIT License — see `LICENSE` file for details.
