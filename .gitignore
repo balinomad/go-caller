@@ -1,0 +1,40 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+#
+forte
+
+# Test binary
+*.test
+
+# Output of go coverage
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+.cover/
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# env file
+.env
+
+# OS
+.DS_Store
+.directory
+
+# Editor/IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
