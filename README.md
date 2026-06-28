@@ -17,6 +17,34 @@ Perfect for use in:
 - Debugging utilities
 - Tracing and instrumentation
 
+## Why not just use `runtime.Caller`?
+
+`runtime.Caller` and `runtime.FuncForPC` already give you the raw data this package is built on:
+
+```go
+pc, file, line, ok := runtime.Caller(0)
+if !ok {
+    // handle failure
+}
+fn := ""
+if f := runtime.FuncForPC(pc); f != nil {
+    fn = f.Name()
+}
+```
+
+That gets you a file path, a line number, and one raw string such as `main.(*Service).Handle`. Splitting that string into a package path, a package name, and a bare method name — correctly, across closures, methods, vendored import paths, and functions with no package at all — is the part most people rewrite slightly differently in every project and rarely cover with tests:
+
+```go
+c := caller.Immediate()
+c.Function()    // "(*Service).Handle"
+c.Package()     // "main"
+c.PackageName() // "main"
+```
+
+`go-caller` does that parsing once, with full test coverage, and adds ready-made `json.Marshaler`/`json.Unmarshaler` and `slog.LogValuer` implementations so caller info drops straight into structured logs or JSON-encoded errors without writing that glue yourself.
+
+If you only need a raw `file:line` for one `fmt.Println`, the stdlib alone is enough. Reach for this package once you want that information parsed, structured, serializable, or handled consistently across a codebase.
+
 ## Features
 
 - Minimal and dependency-free
@@ -27,6 +55,10 @@ Perfect for use in:
 - Implements `json.Marshaler` and `json.Unmarshaler` interfaces for easy JSON serialization
 - Implements `slog.LogValuer` interface for structured logging
 - Semantic equality comparison between callers
+
+## Requirements
+
+Go 1.22 or later.
 
 ## Installation
 
@@ -61,11 +93,12 @@ func someFunc() {
 
 ### Constructor Functions
 
-| Function                       | Description                                      |
-| ------------------------------ | ------------------------------------------------ |
-| `Immediate() Caller`           | Returns caller info for the immediate caller     |
-| `New(skip int) Caller`         | Returns caller info with custom stack skip depth |
-| `NewFromPC(pc uintptr) Caller` | Creates caller info from a program counter       |
+| Function                       | Description                                             |
+| ------------------------------ | ------------------------------------------------------- |
+| `Immediate() Caller`           | Returns caller info for the immediate caller            |
+| `New(skip int) Caller`         | Returns caller info with custom stack skip depth        |
+| `NewFromPC(pc uintptr) Caller` | Creates caller info from a program counter              |
+| `NewEmpty() Caller`            | Returns an empty, invalid `Caller` for `json.Unmarshal` |
 
 ### Caller Interface Methods
 
@@ -86,16 +119,22 @@ func someFunc() {
 | `UnmarshalJSON([]byte) error`   | Unmarshals JSON to caller info                        | -                                |
 | `LogValue() slog.Value`         | Returns structured value for slog                     | `{file:..., line:42, ...}`       |
 
+`Equal` treats a nil `Caller` as never equal to anything, including another nil `Caller` — there is no "two unset callers are the same" case.
+
 ## Advanced Usage
 
 ### Custom Stack Depth
 
+`New` is meant to be called from inside your own helper function, the same way `log.Logger.Output`'s `calldepth` parameter works: `skip` accounts for any wrapper frames above the line where you actually want the location captured.
+
 ```go
-// Skip 0 = immediate caller (same as Immediate())
-// Skip 1 = caller of the immediate caller
-// Skip 2 = caller of the caller, etc.
-c := caller.New(2)
+func logWithCaller(msg string) {
+    c := caller.New(0) // resolves to whoever called logWithCaller, not to this line
+    fmt.Println(c.Location(), msg)
+}
 ```
+
+Calling `New(0)` directly from top-level code, with no wrapper function of your own in between, resolves one frame higher than that — use `Immediate()` instead when you want your own call site captured with no wrapper involved.
 
 ### Using with Program Counter
 
@@ -103,6 +142,8 @@ c := caller.New(2)
 pc, _, _, _ := runtime.Caller(0)
 c := caller.NewFromPC(pc)
 ```
+
+`pc` must be a call-site program counter such as `runtime.Caller`'s first return value. Program counters captured via `runtime.Callers` are return addresses, not call-site addresses — passing one of those directly to `NewFromPC` can resolve to the wrong line, or even an unrelated function. Subtract 1 from a `runtime.Callers` value before passing it here, or resolve frames with `runtime.CallersFrames` instead.
 
 ### JSON Serialization
 
@@ -113,9 +154,11 @@ jsonData, err := json.Marshal(c)
 // Output: {"file":"main.go","line":10,"function":"main","package":"main"}
 
 // Unmarshal
-var c2 caller.Caller
+c2 := caller.NewEmpty()
 err = json.Unmarshal(jsonData, &c2)
 ```
+
+`Caller` is an interface with no exported implementation, so `json.Unmarshal` has no concrete type to construct on its own — `NewEmpty()` is what gives you one to unmarshal into.
 
 ### Structured Logging with slog
 
@@ -143,16 +186,21 @@ if c1.Equal(c2) {
 }
 ```
 
+## Concurrency
+
+A `Caller` is safe for concurrent reads once constructed — multiple goroutines may call `Location()`, `Function()`, `MarshalJSON()`, and the other accessors on the same instance at the same time. The one exception is `UnmarshalJSON`: it mutates the receiver in place with no internal locking, so it must not be called on a `Caller` that another goroutine might be reading or unmarshaling into concurrently. Populate a `Caller` fully (via `NewEmpty()` + `json.Unmarshal`, or one of the constructors) before sharing it across goroutines.
+
 ## Migration from v1 to v2
 
 ### Breaking Changes
 
 1. **`Valid()` behavior**: Now only requires a non-empty file path (previously required file, line, and function)
-2. **`New()` edge cases**: Only returns `nil` for negative skip values
+2. **`New()` edge cases**: Returns `nil` for a negative skip value, or when the requested stack depth exceeds the call stack
 
 ### New Features
 
 - Added `Equal()` method for comparing callers
+- Added `NewEmpty()` constructor to support unmarshaling JSON into a fresh `Caller`
 - Improved performance and error handling
 - Comprehensive test coverage
 
@@ -177,8 +225,7 @@ if c1.Equal(c2) {
 The library is designed to be lightweight with minimal allocations:
 
 - Zero dependencies beyond Go standard library
-- Optimized string operations
-- Efficient memory usage with `uint16` for line numbers
+- A `Caller` is a single small struct, one heap allocation per capture
 - Comprehensive benchmarks included in tests
 
 ## Testing
@@ -186,7 +233,7 @@ The library is designed to be lightweight with minimal allocations:
 Run tests with:
 
 ```bash
-go test -v
+go test -race -v ./...
 ```
 
 Run benchmarks with:
