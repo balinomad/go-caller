@@ -76,9 +76,6 @@ type Caller interface {
 
 // callerInfo represents source information about the caller.
 // It implements the Caller interface.
-//
-// Using uint16 instead of int to save space
-// and to force limitations.
 type callerInfo struct {
 	file   string // File name
 	line   int    // Line number
