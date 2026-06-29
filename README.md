@@ -58,7 +58,7 @@ If you only need a raw `file:line` for one `fmt.Println`, the stdlib alone is en
 
 ## Requirements
 
-Go 1.22 or later.
+Go 1.23 or later.
 
 ## Installation
 
