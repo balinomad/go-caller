@@ -3,10 +3,18 @@
 [![Size](https://img.shields.io/github/languages/code-size/balinomad/go-caller)](https://github.com/balinomad/go-caller)
 [![License](https://img.shields.io/github/license/balinomad/go-caller)](./LICENSE)
 [![Go](https://github.com/balinomad/go-caller/actions/workflows/go.yml/badge.svg)](https://github.com/balinomad/go-caller/actions/workflows/go.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/balinomad/go-caller/v2)](https://goreportcard.com/report/github.com/balinomad/go-caller/v2)
-[![codecov](https://codecov.io/github/balinomad/go-caller/graph/badge.svg?token=L1K68IIN51)](https://codecov.io/github/balinomad/go-caller)
 
 # caller
+
+> **Status: archived.**
+> This repository is no longer maintained. Version `v2.1.0` remains available
+> through the Go module proxy and is safe to keep using, but no further
+> releases, fixes, or support are planned.
+>
+> For most use cases the standard library is sufficient:
+> `runtime.CallersFrames` for stack frames and `log/slog` with
+> `HandlerOptions.AddSource` for structured log source attributes. For a
+> standalone frame type, see `github.com/go-stack/stack`.
 
 _A lightweight and idiomatic Go library that captures and formats caller information such as file name, line number, function name, and package path._
 
